@@ -1,0 +1,71 @@
+# Stabileo 모델 텍스트 형식 v1
+#
+# 이 파일을 고친 뒤 다시 .ded 로 변환하면 프로그램에서 열립니다.
+#   내보내기:  python3 dedtext.py 모델.ded
+#   가져오기:  python3 dedtext.py 모델.txt
+#
+# '#' 뒤는 주석입니다. 빈 줄과 줄 순서는 상관없습니다.
+# 값에 공백이 있으면 큰따옴표로 감싸세요.
+
+MODEL   name=Test   mode=2d
+
+# 절점    NODE  <번호>  <x, m>  <z, m>
+#         z 가 연직 방향입니다. 위쪽이 +.
+NODE       1           0           0
+NODE       2          10           0
+NODE       3          10          10
+
+# 재료    MATERIAL  <번호>  <이름>  <E, MPa>  <포아송비>  <단위중량, kN/m3>  <fy, MPa>
+MATERIAL   1  "Acero A36"     200000  0.3  78.5  250
+
+# 단면    SECTION  <번호>  <이름>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [형상]
+#         Iy 가 면내 휨(강축)에 쓰입니다.
+SECTION    1  "IPN 300"       0.0069  9.8e-05  4.51e-06  4.666e-07  0.125  0.3  I  tf=0.0162  tw=0.0108
+
+# 부재    ELEMENT  <번호>  <frame|truss>  <절점I>  <절점J>  <재료>  <단면>  [해제I]  [해제J]
+#         해제는 my, mz, t 를 쉼표로. 없으면 '-'.
+ELEMENT    1  frame      1     2    1    1  -         -
+ELEMENT    2  frame      2     3    1    1  -         -
+ELEMENT    3  truss      3     1    1    1  -         -
+
+# 지점    SUPPORT  <절점>  <종류>  [key=value ...]
+#         종류: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller
+#         스프링은 kx=, kz=, 경사롤러는 angle=(라디안), 강제변위는 dx= dz= dry=
+SUPPORT    1  pinned
+SUPPORT    2  rollerX
+
+# 하중케이스  LOADCASE  <번호>  <종류>  <이름>        종류: D L W S E T
+LOADCASE   1  D    "Dead Load"
+LOADCASE   2  L    "Live Load"
+LOADCASE   3  W    Wind
+LOADCASE   4  E    Earthquake
+
+# 하중    LOAD  <종류>  key=value ...
+#   nodal  node=  case=  fx=  fz=  my=            절점하중 (kN, kN·m)
+#   dist   elem=  case=  qI=  qJ=  [a=]  [b=]     등분포/사다리꼴 (kN/m, 부재 직각)
+#   point  elem=  case=  a=  [p=]  [px=]  [my=]   부재상 집중하중
+#   temp   elem=  case=  dt=  dtg=                온도 (균일, 구배)
+LOAD    nodal   node=3  case=1  fx=10  fz=0  my=0
+
+# 조합    COMBO  <번호>  <이름>  <케이스:계수> ...
+COMBO      1  "1.2D + 1.6L"         1:1.2 2:1.6
+COMBO      2  1.4D                  1:1.4
+COMBO      3  "1.2D + L + 1.6W"     1:1.2 2:1 3:1.6
+COMBO      4  "1.2D + L + E"        1:1.2 2:1 4:1
+
+# ─────────────────────────────────────────────────────────
+# 아래는 프로그램 설정입니다. 편집하지 마세요.
+# (지우면 기본값으로 되돌아갈 뿐, 파일은 그대로 열립니다)
+EXTRA   __top__appMode  "basico"
+EXTRA   __top__axisConvention3D  "rightHand"
+EXTRA   __top__viewportPresentation3D  "native3d"
+EXTRA   codeSettings  {"version":1,"jurisdiction":{"name":"","basis":"unstated"},"concreteEdition":"2025","loadEdition":"2025","windEdition":"2025","concrete":{"maxAggregateSizeMm":null,"shotcrete":false}}
+EXTRA   connectors  []
+EXTRA   constraints  []
+EXTRA   detailing  {"version":2,"assemblies":[]}
+EXTRA   footingMatPreferences  {"bottomMatDiameterXmm":16,"bottomMatDiameterYmm":16,"bottomMatSpacingPolicy":"AUTO_CODE_COMPLIANT","bottomMatLayerOrder":"AUTO"}
+EXTRA   footings  []
+EXTRA   geotechnical  {"version":1,"profiles":[],"defaultProfileId":null}
+EXTRA   localAxisConvention  "zUpStrongAxis"
+EXTRA   plates  []
+EXTRA   quads  []
