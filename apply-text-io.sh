@@ -16,8 +16,12 @@
 
 set -euo pipefail
 
-REPO="${1:?사용법: ./apply-text-io.sh <저장소경로> [text-format.ts]}"
-SRC_TS="${2:-$(dirname "$0")/text-format.ts}"
+# pushd 가 끼기 전에 잡는다. 나중에 하면 dirname "." 이 엉뚱한 곳을 가리킨다.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+REPO="${1:?사용법: ./apply-text-io.sh <저장소경로> [text-format.ts] [문구표.tsv]}"
+SRC_TS="${2:-$SCRIPT_DIR/text-format.ts}"
+STRINGS="${3:-$SCRIPT_DIR/textio-strings.tsv}"
 
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
@@ -30,6 +34,7 @@ LOCALES="$SRC/lib/i18n/locales"
 [[ -d "$SRC" ]]       || die "저장소 구조가 예상과 다릅니다: $SRC 없음"
 [[ -f "$TOOLBAR" ]]   || die "툴바 파일을 찾을 수 없습니다: $TOOLBAR"
 [[ -f "$SRC_TS" ]]    || die "text-format.ts 를 찾을 수 없습니다: $SRC_TS"
+[[ -f "$STRINGS" ]]   || die "문구표를 찾을 수 없습니다: $STRINGS"
 
 # BSD/GNU sed 차이 흡수 (맥에서도 실행 가능하게)
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -133,38 +138,20 @@ PY
 fi
 
 # ── 5. 문구 추가 ──────────────────────────────────────────────────
+#
+# 문구는 textio-strings.tsv 한 곳에만 둔다. 삽입은 locale-insert.py 가
+# 맡는다 — apply-multibody.sh 도 같은 것을 쓴다. 스크립트마다 따로
+# 들고 있으면 한 곳을 고칠 때 나머지가 남아 네 사전이
+# 서로 어긋나고, 어긋난 것을 아무도 모른다. 상류의 커버리지 테스트는
+# t('키') 만 정규식으로 찾으므로 tp('키', {...}) 로 부르는 문구 —
+# 이 모듈의 오류 문구 전부 — 는 그 검사에 걸리지 않는다.
+#
+# es 와 pt 도 함께 넣는다. 앱이 제공하는 세 언어라서, 하나라도 비면
+# basic-mode-coverage.test.ts 가 떨어진다.
 
-add_locale() {  # $1=파일 $2..=추가할 줄들
-  local file="$1"; shift
-  [[ -f "$file" ]] || return 0
-  grep -q "project.exportText" "$file" && return 0
-  python3 - "$file" "$@" <<'PY'
-import sys
-path, *lines = sys.argv[1:]
-s = open(path, encoding='utf-8').read()
-anchor = "'project.openDed':"
-i = s.find(anchor)
-if i < 0:
-    sys.exit(0)   # 구조가 다르면 조용히 건너뛴다
-ins = "\n".join("  " + l for l in lines) + "\n"
-s = s[:i] + ins.lstrip('\n') + "  " + s[i:].lstrip()
-open(path, 'w', encoding='utf-8').write(s)
-PY
-}
+python3 "$SCRIPT_DIR/locale-insert.py" "$STRINGS" "$LOCALES"
 
-add_locale "$LOCALES/ko.ts" \
-  "'project.exportText': '텍스트'," \
-  "'project.exportTextTooltip': '모델을 편집 가능한 텍스트 파일로 내보내기 (.txt)'," \
-  "'project.openText': '텍스트 열기'," \
-  "'project.openTextTooltip': '텍스트 형식(.txt) 모델 파일 불러오기',"
-
-add_locale "$LOCALES/en.ts" \
-  "'project.exportText': 'Text'," \
-  "'project.exportTextTooltip': 'Export the model as an editable text file (.txt)'," \
-  "'project.openText': 'Open Text'," \
-  "'project.openTextTooltip': 'Load a model from a text (.txt) file',"
-
-ok "문구 추가 (ko, en)"
+ok "문구 추가 (en, es, pt, ko)"
 
 # ── 6. 확인 ───────────────────────────────────────────────────────
 

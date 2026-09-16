@@ -12,6 +12,7 @@
 #   ./build-stabileo.sh --commit abc1234      특정 커밋으로 고정
 #   ./build-stabileo.sh --wasm                Rust/WASM 솔버 빌드 (필수)
 #   ./build-stabileo.sh --wasm-cache ~/wasm   WASM 결과물 보관/재사용 (Rust 불필요)
+#   ./build-stabileo.sh --no-wasm             솔버 없이 빌드 (해석 불가, 화면 확인용)
 #   ./build-stabileo.sh --sign "Developer ID Application: ..."   (macOS 호스트 전용)
 #   ./build-stabileo.sh --no-patches          소스 패치 없이 원본 그대로 빌드
 #   ./build-stabileo.sh --keep                작업 폴더 유지
@@ -46,6 +47,7 @@ KEEP_WORK=0
 SIGN_ID=""
 PATCHES=1
 STRIP_TURNSTILE=1
+NO_WASM=0
 
 # ─── 인자 처리 ───────────────────────────────────────────────────────
 
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --wasm)   BUILD_WASM=1; shift ;;
     --wasm-cache) WASM_CACHE="${2:?--wasm-cache 뒤에 폴더 경로가 필요합니다}"; BUILD_WASM=1; shift 2 ;;
     --keep)   KEEP_WORK=1; shift ;;
+    --no-wasm) NO_WASM=1; shift ;;
     --no-patches) PATCHES=0; shift ;;
     --sign)   SIGN_ID="${2:?--sign 뒤에 서명 ID 가 필요합니다 (임시 서명은 - )}"; shift 2 ;;
     --online) STRIP_TURNSTILE=0; shift ;;
@@ -63,6 +66,31 @@ while [[ $# -gt 0 ]]; do
     *) echo "알 수 없는 옵션: $1  (--help 참고)" >&2; exit 1 ;;
   esac
 done
+
+# 솔버 없는 빌드는 실수로 나오면 안 된다. 빌드도 성공하고 편집기도 열리며
+# 해석 버튼에서만 실패하므로, 배포한 뒤에야 알게 된다 (인수인계 §5.1).
+# 그래서 --wasm / --wasm-cache 가 없으면 여기서 멈추고, 정말 원할 때만
+# --no-wasm 으로 고르게 한다.
+if [[ "$BUILD_WASM" -eq 0 && "$NO_WASM" -eq 0 ]]; then
+  cat >&2 <<'MSG'
+✗ 솔버 WASM 을 어떻게 할지 지정하지 않았습니다.
+
+  WASM 없이 빌드하면 빌드는 성공하고 편집기도 열리지만, 해석 버튼을
+  누르는 순간 "WASM solver not initialized" 로 실패합니다. JS 폴백
+  솔버는 존재하지 않습니다.
+
+  둘 중 하나를 고르세요.
+
+    --wasm-cache <폴더>    보관해 둔 솔버 재사용 (Rust 불필요, 빠름)
+    --wasm                 솔버를 새로 컴파일 (rustup 필요, 10~20분)
+
+  화면만 확인할 목적이라면  --no-wasm  을 쓰세요.
+MSG
+  exit 1
+fi
+if [[ "$NO_WASM" -eq 1 ]]; then
+  BUILD_WASM=0
+fi
 
 BUILD_WIN=0; BUILD_MAC=0; BUILD_LINUX=0
 
@@ -179,7 +207,16 @@ fi
 if [[ "$BUILD_WASM" -eq 1 ]]; then
   # 캐시가 준비되어 있으면 Rust 툴체인 자체가 필요 없다.
   USE_CACHE=0
+  # .wasm 만 보면 안 된다. 로더가 실제로 import 하는 것은 wasm-pack 이
+  # 함께 뽑는 JS 글루(dedaliano_engine.js)이고, 그것이 없으면 브라우저에서
+  # 동적 import 가 실패해 해석 시점에야 드러난다.
   if [[ -n "$WASM_CACHE" && -d "$WASM_CACHE" ]] && compgen -G "$WASM_CACHE/*.wasm" >/dev/null 2>&1; then
+    if ! compgen -G "$WASM_CACHE/*.js" >/dev/null 2>&1; then
+      die "캐시가 반쪽입니다: $WASM_CACHE
+
+  .wasm 은 있으나 JS 글루(*.js)가 없습니다. wasm-pack 출력 한 벌이
+  통째로 있어야 합니다. 폴더를 다시 복사하거나 --wasm 으로 새로 빌드하세요."
+    fi
     USE_CACHE=1
     ok "WASM 캐시 사용: $WASM_CACHE  (Rust 불필요)"
     if [[ -f "$WASM_CACHE/COMMIT" ]]; then
@@ -250,7 +287,17 @@ step "GitHub 에서 소스 내려받기"
 
 if [[ -d "$WORK_DIR/.git" ]]; then
   ok "기존 작업 폴더 재사용"
+  # 앞선 빌드가 --commit 없이 돌았다면 이 폴더는 --depth 1 얕은 클론이다.
+  # fetch --all 은 깊이를 늘리지 않으므로 옛 커밋을 체크아웃할 수 없다.
+  if [[ -n "$COMMIT" ]] && [[ -f "$WORK_DIR/.git/shallow" ]]; then
+    ok "얕은 클론을 전체 이력으로 넓히는 중..."
+    git -C "$WORK_DIR" fetch --unshallow --quiet || git -C "$WORK_DIR" fetch --all --quiet
+  fi
   git -C "$WORK_DIR" fetch --all --tags --quiet
+  # 패치는 매번 깨끗한 트리를 전제한다. 앞선 빌드가 중간에 실패했다면
+  # 수정된 파일이 남아 체크아웃을 막거나 조용히 얹혀 간다.
+  git -C "$WORK_DIR" reset --hard --quiet HEAD
+  git -C "$WORK_DIR" clean -fdq
 else
   rm -rf "$WORK_DIR"
   if [[ -n "$COMMIT" ]]; then
@@ -384,6 +431,8 @@ if [[ "$BUILD_WASM" -eq 1 ]]; then
   src/lib/wasm/ 생성 여부와 위 빌드 로그를 확인하세요."
   fi
   ok "솔버 WASM 번들 확인"
+else
+  warn "솔버 WASM 없이 빌드했습니다 (--no-wasm). 이 배포본은 해석할 수 없습니다."
 fi
 ok "dist 생성: $(du -sh dist | cut -f1)"
 popd >/dev/null

@@ -1,0 +1,96 @@
+# textio-strings.tsv — 텍스트 형식 입출력의 모든 사용자 문구.
+#
+# text-format.ts 가 t()/tp() 로 부르는 키의 유일한 원본이다.
+# apply-text-io.sh 가 이 표를 읽어 locales/{en,es,pt,ko}.ts 에 넣는다.
+#
+# 열: key <탭> en <탭> es <탭> pt <탭> ko
+# '#' 로 시작하는 줄과 빈 줄은 건너뛴다. 값 안에 탭을 쓰지 말 것.
+# {이름} 은 치환 자리다. 네 언어에서 같은 집합이어야 한다
+# (check-textio-i18n.py 가 검사한다).
+#
+# 상류 PR 전 확인: es/pt 는 원어민 검토가 필요하다. §7(b) 참조.
+
+# ── 툴바 버튼 (ToolbarProject.svelte) ─────────────────────────────
+# 여기 es/pt 가 비면 basic-mode-coverage.test.ts 가 떨어진다.
+# .svelte 안의 t('project.*') 는 상류 스캐너가 literal 로 찾아내기 때문이다.
+project.exportText	Text	Texto	Texto	텍스트
+project.exportTextTooltip	Export the model as an editable text file (.txt)	Exportar el modelo como un archivo de texto editable (.txt)	Exportar o modelo como um arquivo de texto editável (.txt)	모델을 편집 가능한 텍스트 파일로 내보내기 (.txt)
+project.openText	Open text	Abrir texto	Abrir texto	텍스트 열기
+project.openTextTooltip	Load a model from a text (.txt) file	Cargar un modelo desde un archivo de texto (.txt)	Carregar um modelo a partir de um arquivo de texto (.txt)	텍스트 형식(.txt) 모델 파일 불러오기
+
+# ── 내보낸 파일의 머리말 ──────────────────────────────────────────
+textio.head.title	Stabileo model text format v{version}	Formato de texto de modelo de Stabileo v{version}	Formato de texto de modelo do Stabileo v{version}	Stabileo 모델 텍스트 형식 v{version}
+textio.head.edit	Edit this file and load it back to change the model.	Edite este archivo y vuelva a cargarlo para cambiar el modelo.	Edite este arquivo e carregue-o de volta para alterar o modelo.	이 파일을 고친 뒤 다시 불러오면 모델이 바뀝니다.
+textio.head.path	Project → Import → Open text	Proyecto → Importar → Abrir texto	Projeto → Importar → Abrir texto	프로젝트 → 가져오기 → 텍스트 열기
+textio.head.comment	Anything after '#' is a comment. Blank lines and line order do not matter.	Todo lo que sigue a '#' es un comentario. Las líneas en blanco y el orden no importan.	Tudo depois de '#' é comentário. Linhas em branco e a ordem não importam.	'#' 뒤는 주석입니다. 빈 줄과 줄 순서는 상관없습니다.
+textio.head.quote	Wrap a value in double quotes if it contains spaces.	Encierre entre comillas dobles los valores que contengan espacios.	Coloque entre aspas duplas os valores que contenham espaços.	값에 공백이 있으면 큰따옴표로 감싸세요.
+
+# ── 항목별 서식 안내 ──────────────────────────────────────────────
+textio.head.node	Node      NODE  <id>  <x, m>  <z, m>	Nudo      NODE  <id>  <x, m>  <z, m>	Nó        NODE  <id>  <x, m>  <z, m>	절점      NODE  <번호>  <x, m>  <z, m>
+textio.head.nodeAxis	z is the vertical axis; up is positive.	z es el eje vertical; hacia arriba es positivo.	z é o eixo vertical; para cima é positivo.	z 가 연직 방향입니다. 위쪽이 +.
+textio.head.material	Material  MATERIAL  <id>  <name>  <E, MPa>  <poisson>  <unit weight, kN/m3>  <fy, MPa>	Material  MATERIAL  <id>  <nombre>  <E, MPa>  <poisson>  <peso específico, kN/m3>  <fy, MPa>	Material  MATERIAL  <id>  <nome>  <E, MPa>  <poisson>  <peso específico, kN/m3>  <fy, MPa>	재료      MATERIAL  <번호>  <이름>  <E, MPa>  <포아송비>  <단위중량, kN/m3>  <fy, MPa>
+textio.head.section	Section   SECTION  <id>  <name>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [shape]	Sección   SECTION  <id>  <nombre>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [forma]	Seção     SECTION  <id>  <nome>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [forma]	단면      SECTION  <번호>  <이름>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [형상]
+textio.head.sectionAxis	Iy is the inertia used for in-plane bending (strong axis).	Iy es la inercia usada para la flexión en el plano (eje fuerte).	Iy é a inércia usada na flexão no plano (eixo forte).	Iy 가 면내 휨(강축)에 쓰입니다.
+textio.head.element	Element   ELEMENT  <id>  <frame|truss>  <node I>  <node J>  <material>  <section>  [release I]  [release J]	Barra     ELEMENT  <id>  <frame|truss>  <nudo I>  <nudo J>  <material>  <sección>  [liberación I]  [liberación J]	Barra     ELEMENT  <id>  <frame|truss>  <nó I>  <nó J>  <material>  <seção>  [liberação I]  [liberação J]	부재      ELEMENT  <번호>  <frame|truss>  <절점I>  <절점J>  <재료>  <단면>  [해제I]  [해제J]
+textio.head.elementRelease	Releases are my, mz, t separated by commas; '-' for none.	Las liberaciones son my, mz, t separadas por comas; '-' si no hay.	As liberações são my, mz, t separadas por vírgulas; '-' se não houver.	해제는 my, mz, t 를 쉼표로. 없으면 '-'.
+textio.head.support	Support   SUPPORT  <node>  <type>  [key=value ...]	Apoyo     SUPPORT  <nudo>  <tipo>  [clave=valor ...]	Apoio     SUPPORT  <nó>  <tipo>  [chave=valor ...]	지점      SUPPORT  <절점>  <종류>  [key=value ...]
+textio.head.supportTypes	Types: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller	Tipos: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller	Tipos: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller	종류: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller
+textio.head.supportParams	spring takes kx= and kz=; inclinedRoller takes angle= (radians)	spring admite kx= y kz=; inclinedRoller admite angle= (radianes)	spring aceita kx= e kz=; inclinedRoller aceita angle= (radianos)	spring 은 kx=, kz= 를, inclinedRoller 는 angle=(라디안) 을 받습니다
+textio.head.loadcase	Load case LOADCASE  <id>  <type>  <name>        types: D L W S E T	Estado    LOADCASE  <id>  <tipo>  <nombre>        tipos: D L W S E T	Caso      LOADCASE  <id>  <tipo>  <nome>          tipos: D L W S E T	하중케이스  LOADCASE  <번호>  <종류>  <이름>        종류: D L W S E T
+textio.head.load	Load      LOAD  <type>  key=value ...	Carga     LOAD  <tipo>  clave=valor ...	Carga     LOAD  <tipo>  chave=valor ...	하중      LOAD  <종류>  key=value ...
+textio.head.loadNodal	nodal  node=  case=  fx=  fz=  my=            nodal load (kN, kN·m)	nodal  node=  case=  fx=  fz=  my=            carga en el nudo (kN, kN·m)	nodal  node=  case=  fx=  fz=  my=            carga no nó (kN, kN·m)	nodal  node=  case=  fx=  fz=  my=            절점하중 (kN, kN·m)
+textio.head.loadDist	dist   elem=  case=  qI=  qJ=  [a=]  [b=]     uniform or trapezoidal (kN/m)	dist   elem=  case=  qI=  qJ=  [a=]  [b=]     uniforme o trapecial (kN/m)	dist   elem=  case=  qI=  qJ=  [a=]  [b=]     uniforme ou trapezoidal (kN/m)	dist   elem=  case=  qI=  qJ=  [a=]  [b=]     등분포/사다리꼴 (kN/m)
+textio.head.loadPoint	point  elem=  case=  a=  [p=]  [px=]  [my=]   point load on the element	point  elem=  case=  a=  [p=]  [px=]  [my=]   carga puntual sobre la barra	point  elem=  case=  a=  [p=]  [px=]  [my=]   carga concentrada na barra	point  elem=  case=  a=  [p=]  [px=]  [my=]   부재상 집중하중
+textio.head.loadTemp	temp   elem=  case=  dt=  dtg=                temperature (uniform, gradient)	temp   elem=  case=  dt=  dtg=                temperatura (uniforme, gradiente)	temp   elem=  case=  dt=  dtg=                temperatura (uniforme, gradiente)	temp   elem=  case=  dt=  dtg=                온도 (균일, 구배)
+textio.head.loadSkipped	(load not written: {type})	(carga no escrita: {type})	(carga não escrita: {type})	(변환되지 않은 하중: {type})
+textio.head.combo	Combo     COMBO  <id>  <name>  <case:factor> ...	Combo     COMBO  <id>  <nombre>  <estado:factor> ...	Combo     COMBO  <id>  <nome>  <caso:fator> ...	조합      COMBO  <번호>  <이름>  <케이스:계수> ...
+textio.head.extra	Below are program settings. Do not edit them.	Abajo están los ajustes del programa. No los edite.	Abaixo estão as configurações do programa. Não as edite.	아래는 프로그램 설정입니다. 편집하지 마세요.
+textio.head.extraNote	(deleting them only restores defaults; the file still opens)	(borrarlos solo restaura los valores por defecto; el archivo sigue abriendo)	(apagá-las apenas restaura os padrões; o arquivo continua abrindo)	(지우면 기본값으로 되돌아갈 뿐, 파일은 그대로 열립니다)
+
+# ── 자리 이름 (오류 문구에 끼워 넣는다) ───────────────────────────
+textio.field.id	id	id	id	번호
+textio.field.poisson	Poisson's ratio	coeficiente de Poisson	coeficiente de Poisson	포아송비
+textio.field.unitWeight	unit weight	peso específico	peso específico	단위중량
+textio.field.nodeI	node I	nudo I	nó I	절점I
+textio.field.nodeJ	node J	nudo J	nó J	절점J
+textio.field.material	material	material	material	재료
+textio.field.section	section	sección	seção	단면
+textio.field.node	node	nudo	nó	절점
+textio.field.case	case	estado	caso	케이스
+textio.field.factor	factor	factor	fator	계수
+
+# ── 오류 ──────────────────────────────────────────────────────────
+textio.err.unknownRelease	Unknown release flag '{flag}'	Liberación desconocida '{flag}'	Liberação desconhecida '{flag}'	알 수 없는 해제 기호 '{flag}'
+textio.err.unclosedQuote	Unclosed double quote.	Comilla doble sin cerrar.	Aspas duplas não fechadas.	따옴표가 닫히지 않았습니다.
+textio.err.atLine	line {line}: {message}	línea {line}: {message}	linha {line}: {message}	{line}행: {message}
+textio.err.badValue	line {line}: could not read the value of '{key}='.	línea {line}: no se pudo leer el valor de '{key}='.	linha {line}: não foi possível ler o valor de '{key}='.	{line}행: '{key}=' 의 값을 읽을 수 없습니다.
+textio.err.notKeyValue	line {line}: '{token}' is not in key=value form.	línea {line}: '{token}' no tiene la forma clave=valor.	linha {line}: '{token}' não está na forma chave=valor.	{line}행: 'key=value' 형태가 아닌 '{token}' 입니다.
+textio.err.needNumber	line {line}: '{field}' must be a number, but is '{got}'.	línea {line}: '{field}' debe ser un número, pero es '{got}'.	linha {line}: '{field}' deve ser um número, mas é '{got}'.	{line}행: '{field}' 에 숫자가 와야 하는데 '{got}' 입니다.
+textio.err.badExtra	line {line}: could not read the value of EXTRA '{key}'.	línea {line}: no se pudo leer el valor de EXTRA '{key}'.	linha {line}: não foi possível ler o valor de EXTRA '{key}'.	{line}행: EXTRA '{key}' 의 값을 읽을 수 없습니다.
+textio.err.nodeFields	line {line}: NODE needs an id, x and z.	línea {line}: NODE necesita id, x y z.	linha {line}: NODE precisa de id, x e z.	{line}행: NODE 는 번호, x, z 가 필요합니다.
+textio.err.materialFields	line {line}: MATERIAL needs an id, a name and E.	línea {line}: MATERIAL necesita id, nombre y E.	linha {line}: MATERIAL precisa de id, nome e E.	{line}행: MATERIAL 은 번호, 이름, E 가 필요합니다.
+textio.err.sectionFields	line {line}: SECTION needs an id, a name, A and Iy.	línea {line}: SECTION necesita id, nombre, A e Iy.	linha {line}: SECTION precisa de id, nome, A e Iy.	{line}행: SECTION 은 번호, 이름, A, Iy 가 필요합니다.
+textio.err.elementFields	line {line}: ELEMENT needs an id, a type, node I, node J, a material and a section.	línea {line}: ELEMENT necesita id, tipo, nudo I, nudo J, material y sección.	linha {line}: ELEMENT precisa de id, tipo, nó I, nó J, material e seção.	{line}행: ELEMENT 는 번호, 종류, 절점I, 절점J, 재료, 단면이 필요합니다.
+textio.err.elementType	line {line}: element type must be frame or truss ('{got}').	línea {line}: el tipo de barra debe ser frame o truss ('{got}').	linha {line}: o tipo de barra deve ser frame ou truss ('{got}').	{line}행: 부재 종류는 frame 또는 truss 입니다 ('{got}').
+textio.err.supportFields	line {line}: SUPPORT needs a node and a type.	línea {line}: SUPPORT necesita nudo y tipo.	linha {line}: SUPPORT precisa de nó e tipo.	{line}행: SUPPORT 는 절점과 종류가 필요합니다.
+textio.err.supportType	line {line}: unknown support type '{got}'. Valid values: {valid}	línea {line}: tipo de apoyo desconocido '{got}'. Valores válidos: {valid}	linha {line}: tipo de apoio desconhecido '{got}'. Valores válidos: {valid}	{line}행: 알 수 없는 지점 종류 '{got}' 입니다. 가능한 값: {valid}
+textio.err.loadcaseFields	line {line}: LOADCASE needs an id and a type.	línea {line}: LOADCASE necesita id y tipo.	linha {line}: LOADCASE precisa de id e tipo.	{line}행: LOADCASE 는 번호와 종류가 필요합니다.
+textio.err.loadFields	line {line}: LOAD needs a type.	línea {line}: LOAD necesita un tipo.	linha {line}: LOAD precisa de um tipo.	{line}행: LOAD 는 종류가 필요합니다.
+textio.err.loadNeedsKey	line {line}: {sub} needs '{key}='.	línea {line}: {sub} necesita '{key}='.	linha {line}: {sub} precisa de '{key}='.	{line}행: {sub} 에 '{key}=' 가 필요합니다.
+textio.err.loadType	line {line}: load type must be nodal, dist, point or temp ('{got}').	línea {line}: el tipo de carga debe ser nodal, dist, point o temp ('{got}').	linha {line}: o tipo de carga deve ser nodal, dist, point ou temp ('{got}').	{line}행: 하중 종류는 nodal, dist, point, temp 입니다 ('{got}').
+textio.err.comboFields	line {line}: COMBO needs an id and a name.	línea {line}: COMBO necesita id y nombre.	linha {line}: COMBO precisa de id e nome.	{line}행: COMBO 는 번호와 이름이 필요합니다.
+textio.err.comboTerm	line {line}: a combination term has the form 'case:factor' ('{got}').	línea {line}: un término de combinación tiene la forma 'estado:factor' ('{got}').	linha {line}: um termo de combinação tem a forma 'caso:fator' ('{got}').	{line}행: 조합 항은 '케이스:계수' 형태입니다 ('{got}').
+textio.err.unknownKind	line {line}: unknown entry '{got}'.	línea {line}: entrada desconocida '{got}'.	linha {line}: entrada desconhecida '{got}'.	{line}행: 알 수 없는 항목 '{got}' 입니다.
+textio.err.refNode	element {id}: node {ref} is not defined.	barra {id}: el nudo {ref} no está definido.	barra {id}: o nó {ref} não está definido.	부재 {id}: 절점 {ref} 가 정의되지 않았습니다.
+textio.err.refMaterial	element {id}: material {ref} is not defined.	barra {id}: el material {ref} no está definido.	barra {id}: o material {ref} não está definido.	부재 {id}: 재료 {ref} 가 정의되지 않았습니다.
+textio.err.refSection	element {id}: section {ref} is not defined.	barra {id}: la sección {ref} no está definida.	barra {id}: a seção {ref} não está definida.	부재 {id}: 단면 {ref} 가 정의되지 않았습니다.
+textio.err.refSupportNode	support: node {ref} is not defined.	apoyo: el nudo {ref} no está definido.	apoio: o nó {ref} não está definido.	지점: 절점 {ref} 가 정의되지 않았습니다.
+textio.err.refLoadNode	load: node {ref} is not defined.	carga: el nudo {ref} no está definido.	carga: o nó {ref} não está definido.	하중: 절점 {ref} 가 정의되지 않았습니다.
+textio.err.refLoadElement	load: element {ref} is not defined.	carga: la barra {ref} no está definida.	carga: a barra {ref} não está definida.	하중: 부재 {ref} 가 정의되지 않았습니다.
+textio.err.refLoadCase	load: load case {ref} is not defined.	carga: el estado de carga {ref} no está definido.	carga: o caso de carga {ref} não está definido.	하중: 하중케이스 {ref} 가 정의되지 않았습니다.
+textio.err.noNodes	The file defines no nodes.	El archivo no define ningún nudo.	O arquivo não define nenhum nó.	절점이 하나도 없습니다.
+
+# ── 결과 알림 ─────────────────────────────────────────────────────
+textio.msg.parseFailed	There were problems reading the text.	Hubo problemas al leer el texto.	Houve problemas ao ler o texto.	텍스트를 읽는 중 문제가 있습니다.
+textio.msg.andMore	... and {n} more	... y {n} más	... e mais {n}	... 외 {n}건
+textio.msg.loaded	Loaded. Nodes {nodes}, elements {elements}, loads {loads}	Cargado. Nudos {nodes}, barras {elements}, cargas {loads}	Carregado. Nós {nodes}, barras {elements}, cargas {loads}	불러왔습니다. 절점 {nodes}, 부재 {elements}, 하중 {loads}

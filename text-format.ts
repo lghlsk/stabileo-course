@@ -1,11 +1,18 @@
 /**
- * text-format.ts — 사람이 읽고 고칠 수 있는 텍스트 모델 형식.
+ * text-format.ts — a model format a person can read and edit.
  *
- * 그래픽 편집기를 거치지 않고 절점 좌표나 하중을 바꾸고 싶을 때 쓴다.
- * 한 줄에 한 항목, 첫 낱말이 종류, '#' 뒤는 주석이다.
+ * For changing a coordinate or a load without going through the graphical
+ * editor. One entry per line, the first word says what kind, and anything
+ * after '#' is a comment.
  *
- * 이 파일의 인코딩·디코딩 규칙은 dedtext.py 와 같다. 둘 중 하나를
- * 고치면 다른 하나도 함께 고쳐야 한다.
+ * Every string the user sees goes through `t()` / `tp()`. The file this
+ * writes is localised too: its header comments explain the format, and a
+ * reader who cannot read them cannot edit the file. The keys live under
+ * `textio.*`; the format's own words — NODE, MATERIAL, fx, qI — are not
+ * translated, because they are syntax rather than prose.
+ *
+ * The encoding and decoding rules here are the same as dedtext.py's. Change
+ * one and the other has to follow.
  */
 
 import { modelStore } from '../store/model.svelte';
@@ -13,6 +20,7 @@ import { uiStore } from '../store/ui.svelte';
 import { historyStore } from '../store/history.svelte';
 import { resultsStore } from '../store/results.svelte';
 import { downloadText } from '../store/file';
+import { t, tp } from '../i18n';
 
 export const TEXT_FORMAT_VERSION = '1';
 
@@ -22,7 +30,7 @@ const SUPPORT_TYPES = new Set([
   'fixed', 'pinned', 'rollerX', 'rollerZ', 'rollerY', 'spring', 'inclinedRoller',
 ]);
 
-/** 위치 인자로 표현하는 필드. 나머지는 줄 끝에 key=value 로 보존한다. */
+/** Fields carried as positional arguments. The rest survive as trailing key=value. */
 const KNOWN: Record<string, Set<string>> = {
   NODE: new Set(['id', 'x', 'y', 'z']),
   MATERIAL: new Set(['id', 'name', 'e', 'nu', 'rho', 'fy']),
@@ -32,14 +40,14 @@ const KNOWN: Record<string, Set<string>> = {
   SUPPORT: new Set(['id', 'nodeId', 'type']),
 };
 
-/** 텍스트로 옮기는 스냅샷 키. 그 밖은 EXTRA 로 원본 보존. */
+/** Snapshot keys the text carries. Everything else is preserved verbatim as EXTRA. */
 const MODELLED = new Set([
   'name', 'nodes', 'materials', 'sections', 'elements',
   'supports', 'loads', 'loadCases', 'combinations', 'nextId',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────
-// 도우미
+// Helpers
 // ─────────────────────────────────────────────────────────────────────
 
 function num(v: unknown): string {
@@ -49,8 +57,9 @@ function num(v: unknown): string {
 }
 
 function quote(s: unknown): string {
-  const t = s == null ? '' : String(s);
-  return (t === '' || /[\s"#]/.test(t)) ? `"${t}"` : t;
+  // Not named `t`: that is the translation function, imported above.
+  const str = s == null ? '' : String(s);
+  return (str === '' || /[\s"#]/.test(str)) ? `"${str}"` : str;
 }
 
 function pad(s: string, n: number): string {
@@ -88,7 +97,7 @@ function parseRelease(tok: string): Record<string, boolean> {
     const k = p.trim();
     if (!k) continue;
     if (!(RELEASE_KEYS as readonly string[]).includes(k)) {
-      throw new Error(`알 수 없는 해제 기호 '${k}'`);
+      throw new Error(tp('textio.err.unknownRelease', { flag: k }));
     }
     out[k] = true;
   }
@@ -113,7 +122,7 @@ function absorbExtras(obj: any, kvs: Record<string, string>, line: number): any 
   for (const [k, v] of Object.entries(kvs)) {
     if (v.startsWith('@')) {
       try { obj[k] = JSON.parse(v.slice(1)); }
-      catch { throw new Error(`${line}행: '${k}=' 의 값을 읽을 수 없습니다.`); }
+      catch { throw new Error(tp('textio.err.badValue', { line, key: k })); }
     } else if (v === 'true' || v === 'false') {
       obj[k] = v === 'true';
     } else {
@@ -124,7 +133,7 @@ function absorbExtras(obj: any, kvs: Record<string, string>, line: number): any 
   return obj;
 }
 
-/** 따옴표를 존중하며 낱말로 나눈다. '#' 뒤는 버린다. */
+/** Split into words, honouring quotes. Anything after '#' is dropped. */
 function splitLine(line: string): string[] {
   const out: string[] = [];
   let cur = '';
@@ -144,7 +153,7 @@ function splitLine(line: string): string[] {
     }
     cur += c;
   }
-  if (inQuote) throw new Error('따옴표가 닫히지 않았습니다.');
+  if (inQuote) throw new Error(t('textio.err.unclosedQuote'));
   if (has || cur) out.push(cur);
   return out;
 }
@@ -152,24 +161,31 @@ function splitLine(line: string): string[] {
 function kvFrom(tokens: string[], start: number, line: number): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = start; i < tokens.length; i++) {
-    const t = tokens[i];
-    const eq = t.indexOf('=');
-    if (eq < 0) throw new Error(`${line}행: 'key=value' 형태가 아닌 '${t}' 입니다.`);
-    out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    const tok = tokens[i];
+    const eq = tok.indexOf('=');
+    if (eq < 0) throw new Error(tp('textio.err.notKeyValue', { line, token: tok }));
+    out[tok.slice(0, eq).trim()] = tok.slice(eq + 1).trim();
   }
   return out;
 }
 
+/**
+ * `field` arrives already translated.
+ *
+ * Most call sites pass the format's own name — 'x', 'E', 'Iy', 'fx' — which is
+ * the same word in every language and is what the user sees in the file. The
+ * ones that would otherwise read as prose pass `t('textio.field.*')`.
+ */
 function requireNum(tok: string | undefined, field: string, line: number): number {
   const f = Number(tok);
   if (tok === undefined || tok === '' || !Number.isFinite(f)) {
-    throw new Error(`${line}행: '${field}' 에 숫자가 와야 하는데 '${tok ?? ''}' 입니다.`);
+    throw new Error(tp('textio.err.needNumber', { line, field, got: tok ?? '' }));
   }
   return f;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 내보내기
+// Export
 // ─────────────────────────────────────────────────────────────────────
 
 export function modelToText(): string {
@@ -187,19 +203,19 @@ export function modelToText(): string {
   const w = (s = '') => L.push(s.replace(/\s+$/, ''));
   const sortedKeys = (m: Map<number, any>) => [...m.keys()].sort((a, b) => a - b);
 
-  w(`# Stabileo 모델 텍스트 형식 v${TEXT_FORMAT_VERSION}`);
+  w('# ' + tp('textio.head.title', { version: TEXT_FORMAT_VERSION }));
   w('#');
-  w('# 이 파일을 고친 뒤 다시 불러오면 모델이 바뀝니다.');
-  w('# 프로젝트 → 가져오기 → 텍스트 열기');
+  w('# ' + t('textio.head.edit'));
+  w('# ' + t('textio.head.path'));
   w('#');
-  w("# '#' 뒤는 주석입니다. 빈 줄과 줄 순서는 상관없습니다.");
-  w('# 값에 공백이 있으면 큰따옴표로 감싸세요.');
+  w('# ' + t('textio.head.comment'));
+  w('# ' + t('textio.head.quote'));
   w('');
   w(`MODEL   name=${quote(modelStore.model.name)}   mode=${uiStore.analysisMode}`);
   w('');
 
-  w('# 절점    NODE  <번호>  <x, m>  <z, m>');
-  w('#         z 가 연직 방향입니다. 위쪽이 +.');
+  w('# ' + t('textio.head.node'));
+  w('#         ' + t('textio.head.nodeAxis'));
   for (const i of sortedKeys(nodes)) {
     const n = nodes.get(i);
     const z = n.z ?? n.y ?? 0;
@@ -208,7 +224,7 @@ export function modelToText(): string {
   }
   w('');
 
-  w('# 재료    MATERIAL  <번호>  <이름>  <E, MPa>  <포아송비>  <단위중량, kN/m3>  <fy, MPa>');
+  w('# ' + t('textio.head.material'));
   for (const i of sortedKeys(mats)) {
     const m = mats.get(i);
     w(`MATERIAL ${padStart(String(i), 3)}  ${pad(quote(m.name ?? `MAT${i}`), 14)}`
@@ -217,8 +233,8 @@ export function modelToText(): string {
   }
   w('');
 
-  w('# 단면    SECTION  <번호>  <이름>  <A, m2>  <Iy, m4>  <Iz, m4>  <J, m4>  <b, m>  <h, m>  [형상]');
-  w('#         Iy 가 면내 휨(강축)에 쓰입니다.');
+  w('# ' + t('textio.head.section'));
+  w('#         ' + t('textio.head.sectionAxis'));
   for (const i of sortedKeys(secs)) {
     const s = secs.get(i);
     w(`SECTION ${padStart(String(i), 4)}  ${pad(quote(s.name ?? `SEC${i}`), 14)}`
@@ -228,8 +244,8 @@ export function modelToText(): string {
   }
   w('');
 
-  w('# 부재    ELEMENT  <번호>  <frame|truss>  <절점I>  <절점J>  <재료>  <단면>  [해제I]  [해제J]');
-  w("#         해제는 my, mz, t 를 쉼표로. 없으면 '-'.");
+  w('# ' + t('textio.head.element'));
+  w('#         ' + t('textio.head.elementRelease'));
   for (const i of sortedKeys(elems)) {
     const e = elems.get(i);
     w(`ELEMENT ${padStart(String(i), 4)}  ${pad(String(e.type ?? 'frame'), 6)}`
@@ -240,9 +256,9 @@ export function modelToText(): string {
   }
   w('');
 
-  w('# 지점    SUPPORT  <절점>  <종류>  [key=value ...]');
-  w('#         종류: fixed  pinned  rollerX  rollerZ  spring  inclinedRoller');
-  w('#         스프링은 kx=, kz=, 경사롤러는 angle=(라디안)');
+  w('# ' + t('textio.head.support'));
+  w('#         ' + t('textio.head.supportTypes'));
+  w('#         ' + t('textio.head.supportParams'));
   for (const i of sortedKeys(sups)) {
     const s = sups.get(i);
     w(`SUPPORT ${padStart(String(s.nodeId), 4)}  ${pad(String(s.type ?? 'pinned'), 14)}`
@@ -250,44 +266,44 @@ export function modelToText(): string {
   }
   w('');
 
-  w('# 하중케이스  LOADCASE  <번호>  <종류>  <이름>        종류: D L W S E T');
-  for (const c of cases) {
-    w(`LOADCASE ${padStart(String(c.id), 3)}  ${pad(String(c.type ?? 'D'), 3)}`
-      + `  ${quote(c.name ?? `CASE${c.id}`)}`);
+  w('# ' + t('textio.head.loadcase'));
+  for (const lc of cases) {
+    w(`LOADCASE ${padStart(String(lc.id), 3)}  ${pad(String(lc.type ?? 'D'), 3)}`
+      + `  ${quote(lc.name ?? `CASE${lc.id}`)}`);
   }
   w('');
 
-  w('# 하중    LOAD  <종류>  key=value ...');
-  w('#   nodal  node=  case=  fx=  fz=  my=            절점하중 (kN, kN·m)');
-  w('#   dist   elem=  case=  qI=  qJ=  [a=]  [b=]     등분포/사다리꼴 (kN/m)');
-  w('#   point  elem=  case=  a=  [p=]  [px=]  [my=]   부재상 집중하중');
-  w('#   temp   elem=  case=  dt=  dtg=                온도 (균일, 구배)');
+  w('# ' + t('textio.head.load'));
+  w('#   ' + t('textio.head.loadNodal'));
+  w('#   ' + t('textio.head.loadDist'));
+  w('#   ' + t('textio.head.loadPoint'));
+  w('#   ' + t('textio.head.loadTemp'));
   for (const ld of loads) {
     const d = ld.data ?? {};
-    const c = d.caseId ?? 1;
+    const caseId = d.caseId ?? 1;
     if (ld.type === 'nodal') {
-      w(`LOAD    nodal   node=${d.nodeId}  case=${c}`
+      w(`LOAD    nodal   node=${d.nodeId}  case=${caseId}`
         + `  fx=${num(d.fx)}  fz=${num(d.fz)}  my=${num(d.my)}`);
     } else if (ld.type === 'distributed') {
       let ab = '';
       if (d.a != null) ab += `  a=${num(d.a)}`;
       if (d.b != null) ab += `  b=${num(d.b)}`;
-      w(`LOAD    dist    elem=${d.elementId}  case=${c}`
+      w(`LOAD    dist    elem=${d.elementId}  case=${caseId}`
         + `  qI=${num(d.qI)}  qJ=${num(d.qJ)}${ab}`);
     } else if (ld.type === 'pointOnElement') {
       let opt = '';
       for (const k of ['p', 'px', 'my']) if (d[k]) opt += `  ${k}=${num(d[k])}`;
-      w(`LOAD    point   elem=${d.elementId}  case=${c}  a=${num(d.a)}${opt}`);
+      w(`LOAD    point   elem=${d.elementId}  case=${caseId}  a=${num(d.a)}${opt}`);
     } else if (ld.type === 'thermal') {
-      w(`LOAD    temp    elem=${d.elementId}  case=${c}`
+      w(`LOAD    temp    elem=${d.elementId}  case=${caseId}`
         + `  dt=${num(d.dtUniform)}  dtg=${num(d.dtGradient)}`);
     } else {
-      w(`# (변환되지 않은 하중: ${ld.type})`);
+      w('# ' + tp('textio.head.loadSkipped', { type: ld.type }));
     }
   }
   w('');
 
-  w('# 조합    COMBO  <번호>  <이름>  <케이스:계수> ...');
+  w('# ' + t('textio.head.combo'));
   for (const cb of combos) {
     const terms = (cb.factors ?? [])
       .map((f: any) => `${f.caseId}:${num(f.factor)}`).join(' ');
@@ -295,10 +311,10 @@ export function modelToText(): string {
   }
   w('');
 
-  // 텍스트로 표현하지 않는 설정을 그대로 실어 왕복에서 잃지 않게 한다.
-  // 값이 undefined 인 키는 건너뛴다. JSON.stringify(undefined) 는 문자열이
-  // 아니라 undefined 를 돌려주므로, 그대로 쓰면 'undefined' 라는 글자가
-  // 파일에 남아 다시 읽을 때 JSON.parse 가 실패한다.
+  // Settings the text does not model, carried verbatim so a round trip loses nothing.
+  // Keys whose value is `undefined` are skipped: JSON.stringify(undefined) returns
+  // undefined rather than a string, so writing it puts the word 'undefined' in the
+  // file and JSON.parse fails on the way back in.
   const extras: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(snap)) {
     if (!MODELLED.has(k) && v !== undefined) extras[k] = v;
@@ -308,11 +324,11 @@ export function modelToText(): string {
   if (uiStore.viewportPresentation3D !== undefined) extras['__top__viewportPresentation3D'] = uiStore.viewportPresentation3D;
 
   w('# ─────────────────────────────────────────────────────────');
-  w('# 아래는 프로그램 설정입니다. 편집하지 마세요.');
-  w('# (지우면 기본값으로 되돌아갈 뿐, 파일은 그대로 열립니다)');
+  w('# ' + t('textio.head.extra'));
+  w('# ' + t('textio.head.extraNote'));
   for (const k of Object.keys(extras).sort()) {
     const json = JSON.stringify(extras[k]);
-    if (json === undefined) continue;   // 함수/심볼 등 직렬화 불가한 값
+    if (json === undefined) continue;   // functions, symbols — not serialisable
     w(`EXTRA   ${k}  ${json}`);
   }
   w('');
@@ -321,7 +337,7 @@ export function modelToText(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 가져오기
+// Import
 // ─────────────────────────────────────────────────────────────────────
 
 export interface TextParseResult {
@@ -352,28 +368,31 @@ export function textToProjectFile(text: string): TextParseResult {
     const raw = lines[li];
     const trimmed = raw.trim();
 
-    // EXTRA 는 값이 JSON 이라 낱말 분해를 거치면 따옴표가 벗겨진다.
+    // EXTRA carries JSON, which would lose its quotes if it went through the word split.
     if (/^EXTRA[\s]/i.test(trimmed)) {
       const rest = trimmed.slice(5).trim();
       const sp = rest.indexOf(' ');
       const key = sp < 0 ? rest : rest.slice(0, sp);
       const payload = sp < 0 ? '' : rest.slice(sp + 1).trim();
-      // 값이 비었거나 'undefined' 면 그 설정이 없었다는 뜻이다. 이전
-      // 빌드가 내보낸 파일에도 이런 줄이 있을 수 있으므로 조용히 넘긴다.
+      // An empty value, or the word 'undefined', means the setting was absent.
+      // Files written by an earlier build can carry such a line, so pass over it.
       if (payload === '' || payload === 'undefined') continue;
       try {
         const val = JSON.parse(payload);
         if (key.startsWith('__top__')) topExtras[key.slice(7)] = val;
         else extras[key] = val;
       } catch {
-        errors.push(`${lineno}행: EXTRA '${key}' 의 값을 읽을 수 없습니다.`);
+        errors.push(tp('textio.err.badExtra', { line: lineno, key }));
       }
       continue;
     }
 
     let tok: string[];
     try { tok = splitLine(raw); }
-    catch (e: any) { errors.push(`${lineno}행: ${e.message}`); continue; }
+    catch (e: any) {
+      errors.push(tp('textio.err.atLine', { line: lineno, message: e.message }));
+      continue;
+    }
     if (!tok.length) continue;
 
     const kind = tok[0].toUpperCase();
@@ -384,25 +403,25 @@ export function textToProjectFile(text: string): TextParseResult {
         if (d.mode) mode = d.mode;
 
       } else if (kind === 'NODE') {
-        if (tok.length < 4) throw new Error(`${lineno}행: NODE 는 번호, x, z 가 필요합니다.`);
-        const id = requireNum(tok[1], '번호', lineno);
+        if (tok.length < 4) throw new Error(tp('textio.err.nodeFields', { line: lineno }));
+        const id = requireNum(tok[1], t('textio.field.id'), lineno);
         nodes.set(id, absorbExtras(
           { id, x: requireNum(tok[2], 'x', lineno), y: requireNum(tok[3], 'z', lineno) },
           kvFrom(tok, 4, lineno), lineno));
 
       } else if (kind === 'MATERIAL') {
-        if (tok.length < 4) throw new Error(`${lineno}행: MATERIAL 은 번호, 이름, E 가 필요합니다.`);
-        const id = requireNum(tok[1], '번호', lineno);
+        if (tok.length < 4) throw new Error(tp('textio.err.materialFields', { line: lineno }));
+        const id = requireNum(tok[1], t('textio.field.id'), lineno);
         mats.set(id, absorbExtras({
           id, name: tok[2], e: requireNum(tok[3], 'E', lineno),
-          nu: tok.length > 4 ? requireNum(tok[4], '포아송비', lineno) : 0.3,
-          rho: tok.length > 5 ? requireNum(tok[5], '단위중량', lineno) : 0,
+          nu: tok.length > 4 ? requireNum(tok[4], t('textio.field.poisson'), lineno) : 0.3,
+          rho: tok.length > 5 ? requireNum(tok[5], t('textio.field.unitWeight'), lineno) : 0,
           fy: tok.length > 6 ? requireNum(tok[6], 'fy', lineno) : 0,
         }, kvFrom(tok, 7, lineno), lineno));
 
       } else if (kind === 'SECTION') {
-        if (tok.length < 5) throw new Error(`${lineno}행: SECTION 은 번호, 이름, A, Iy 가 필요합니다.`);
-        const id = requireNum(tok[1], '번호', lineno);
+        if (tok.length < 5) throw new Error(tp('textio.err.sectionFields', { line: lineno }));
+        const id = requireNum(tok[1], t('textio.field.id'), lineno);
         const g = (i: number, f: string) => (tok.length > i ? requireNum(tok[i], f, lineno) : 0);
         const sec: any = {
           id, name: tok[2], a: requireNum(tok[3], 'A', lineno),
@@ -414,46 +433,49 @@ export function textToProjectFile(text: string): TextParseResult {
 
       } else if (kind === 'ELEMENT') {
         if (tok.length < 7) {
-          throw new Error(`${lineno}행: ELEMENT 는 번호, 종류, 절점I, 절점J, 재료, 단면이 필요합니다.`);
+          throw new Error(tp('textio.err.elementFields', { line: lineno }));
         }
-        const id = requireNum(tok[1], '번호', lineno);
+        const id = requireNum(tok[1], t('textio.field.id'), lineno);
         const type = tok[2].toLowerCase();
         if (type !== 'frame' && type !== 'truss') {
-          throw new Error(`${lineno}행: 부재 종류는 frame 또는 truss 입니다 ('${tok[2]}').`);
+          throw new Error(tp('textio.err.elementType', { line: lineno, got: tok[2] }));
         }
         elems.set(id, absorbExtras({
           id, type,
-          nodeI: requireNum(tok[3], '절점I', lineno),
-          nodeJ: requireNum(tok[4], '절점J', lineno),
-          materialId: requireNum(tok[5], '재료', lineno),
-          sectionId: requireNum(tok[6], '단면', lineno),
+          nodeI: requireNum(tok[3], t('textio.field.nodeI'), lineno),
+          nodeJ: requireNum(tok[4], t('textio.field.nodeJ'), lineno),
+          materialId: requireNum(tok[5], t('textio.field.material'), lineno),
+          sectionId: requireNum(tok[6], t('textio.field.section'), lineno),
           releaseI: parseRelease(tok[7] ?? '-'),
           releaseJ: parseRelease(tok[8] ?? '-'),
         }, kvFrom(tok, 9, lineno), lineno));
 
       } else if (kind === 'SUPPORT') {
-        if (tok.length < 3) throw new Error(`${lineno}행: SUPPORT 는 절점과 종류가 필요합니다.`);
+        if (tok.length < 3) throw new Error(tp('textio.err.supportFields', { line: lineno }));
         if (!SUPPORT_TYPES.has(tok[2])) {
-          throw new Error(`${lineno}행: 알 수 없는 지점 종류 '${tok[2]}' 입니다. `
-            + `가능한 값: ${[...SUPPORT_TYPES].join(', ')}`);
+          throw new Error(tp('textio.err.supportType', {
+            line: lineno, got: tok[2], valid: [...SUPPORT_TYPES].join(', '),
+          }));
         }
         const id = sups.size + 1;
         sups.set(id, absorbExtras(
-          { id, nodeId: requireNum(tok[1], '절점', lineno), type: tok[2] },
+          { id, nodeId: requireNum(tok[1], t('textio.field.node'), lineno), type: tok[2] },
           kvFrom(tok, 3, lineno), lineno));
 
       } else if (kind === 'LOADCASE') {
-        if (tok.length < 3) throw new Error(`${lineno}행: LOADCASE 는 번호와 종류가 필요합니다.`);
-        const id = requireNum(tok[1], '번호', lineno);
+        if (tok.length < 3) throw new Error(tp('textio.err.loadcaseFields', { line: lineno }));
+        const id = requireNum(tok[1], t('textio.field.id'), lineno);
         cases.set(id, { id, type: tok[2], name: tok[3] ?? `CASE${id}` });
 
       } else if (kind === 'LOAD') {
-        if (tok.length < 2) throw new Error(`${lineno}행: LOAD 는 종류가 필요합니다.`);
+        if (tok.length < 2) throw new Error(tp('textio.err.loadFields', { line: lineno }));
         const sub = tok[1].toLowerCase();
         const d = kvFrom(tok, 2, lineno);
         const n = (k: string, dflt = 0) => (d[k] === undefined ? dflt : requireNum(d[k], k, lineno));
         const need = (k: string) => {
-          if (d[k] === undefined) throw new Error(`${lineno}행: ${sub} 에 '${k}=' 가 필요합니다.`);
+          if (d[k] === undefined) {
+            throw new Error(tp('textio.err.loadNeedsKey', { line: lineno, sub, key: k }));
+          }
           return requireNum(d[k], k, lineno);
         };
         const caseId = n('case', 1);
@@ -473,49 +495,55 @@ export function textToProjectFile(text: string): TextParseResult {
         } else if (sub === 'temp' || sub === 'thermal') {
           loads.push({ type: 'thermal', data: { id, elementId: need('elem'), dtUniform: n('dt'), dtGradient: n('dtg'), caseId } });
         } else {
-          throw new Error(`${lineno}행: 하중 종류는 nodal, dist, point, temp 입니다 ('${tok[1]}').`);
+          throw new Error(tp('textio.err.loadType', { line: lineno, got: tok[1] }));
         }
 
       } else if (kind === 'COMBO') {
-        if (tok.length < 3) throw new Error(`${lineno}행: COMBO 는 번호와 이름이 필요합니다.`);
+        if (tok.length < 3) throw new Error(tp('textio.err.comboFields', { line: lineno }));
         const factors = [];
         for (let i = 3; i < tok.length; i++) {
-          const t = tok[i];
-          const c = t.indexOf(':');
-          if (c < 0) throw new Error(`${lineno}행: 조합 항은 '케이스:계수' 형태입니다 ('${t}').`);
+          const term = tok[i];
+          const colon = term.indexOf(':');
+          if (colon < 0) {
+            throw new Error(tp('textio.err.comboTerm', { line: lineno, got: term }));
+          }
           factors.push({
-            caseId: requireNum(t.slice(0, c), '케이스', lineno),
-            factor: requireNum(t.slice(c + 1), '계수', lineno),
+            caseId: requireNum(term.slice(0, colon), t('textio.field.case'), lineno),
+            factor: requireNum(term.slice(colon + 1), t('textio.field.factor'), lineno),
           });
         }
-        combos.push({ id: requireNum(tok[1], '번호', lineno), name: tok[2], factors });
+        combos.push({
+          id: requireNum(tok[1], t('textio.field.id'), lineno),
+          name: tok[2],
+          factors,
+        });
 
       } else {
-        errors.push(`${lineno}행: 알 수 없는 항목 '${tok[0]}' 입니다.`);
+        errors.push(tp('textio.err.unknownKind', { line: lineno, got: tok[0] }));
       }
     } catch (e: any) {
       errors.push(e.message);
     }
   }
 
-  // 참조 무결성 — 여기서 걸러야 로더가 조용히 파일을 거부하지 않는다.
+  // Referential integrity — caught here, because the loader rejects a bad file silently.
   for (const [id, e] of elems) {
     for (const side of ['nodeI', 'nodeJ'] as const) {
-      if (!nodes.has(e[side])) errors.push(`부재 ${id}: 절점 ${e[side]} 가 정의되지 않았습니다.`);
+      if (!nodes.has(e[side])) errors.push(tp('textio.err.refNode', { id, ref: e[side] }));
     }
-    if (!mats.has(e.materialId)) errors.push(`부재 ${id}: 재료 ${e.materialId} 가 정의되지 않았습니다.`);
-    if (!secs.has(e.sectionId)) errors.push(`부재 ${id}: 단면 ${e.sectionId} 가 정의되지 않았습니다.`);
+    if (!mats.has(e.materialId)) errors.push(tp('textio.err.refMaterial', { id, ref: e.materialId }));
+    if (!secs.has(e.sectionId)) errors.push(tp('textio.err.refSection', { id, ref: e.sectionId }));
   }
   for (const s of sups.values()) {
-    if (!nodes.has(s.nodeId)) errors.push(`지점: 절점 ${s.nodeId} 가 정의되지 않았습니다.`);
+    if (!nodes.has(s.nodeId)) errors.push(tp('textio.err.refSupportNode', { ref: s.nodeId }));
   }
   for (const ld of loads) {
     const d = ld.data;
-    if (d.nodeId !== undefined && !nodes.has(d.nodeId)) errors.push(`하중: 절점 ${d.nodeId} 가 정의되지 않았습니다.`);
-    if (d.elementId !== undefined && !elems.has(d.elementId)) errors.push(`하중: 부재 ${d.elementId} 가 정의되지 않았습니다.`);
-    if (cases.size && !cases.has(d.caseId)) errors.push(`하중: 하중케이스 ${d.caseId} 가 정의되지 않았습니다.`);
+    if (d.nodeId !== undefined && !nodes.has(d.nodeId)) errors.push(tp('textio.err.refLoadNode', { ref: d.nodeId }));
+    if (d.elementId !== undefined && !elems.has(d.elementId)) errors.push(tp('textio.err.refLoadElement', { ref: d.elementId }));
+    if (cases.size && !cases.has(d.caseId)) errors.push(tp('textio.err.refLoadCase', { ref: d.caseId }));
   }
-  if (!nodes.size) errors.push('절점이 하나도 없습니다.');
+  if (!nodes.size) errors.push(t('textio.err.noNodes'));
 
   if (errors.length) {
     return { ok: false, errors: [...new Set(errors)] };
@@ -533,7 +561,7 @@ export function textToProjectFile(text: string): TextParseResult {
     support: maxOf(sups) + 1,
     load: loads.length + 1,
     loadCase: maxOf(cases) + 1,
-    combination: combos.reduce((a, c) => Math.max(a, c.id), 0) + 1,
+    combination: combos.reduce((a, cb) => Math.max(a, cb.id), 0) + 1,
   };
 
   const pairs = (m: Map<number, any>) =>
@@ -573,7 +601,7 @@ export function textToProjectFile(text: string): TextParseResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// UI 진입점
+// UI entry points
 // ─────────────────────────────────────────────────────────────────────
 
 function safeName(n: string): string {
@@ -586,8 +614,10 @@ export function downloadModelText(): void {
 }
 
 /**
- * 텍스트를 읽어 모델을 교체한다. .ded 열기와 같은 경로를 쓰되,
- * 파일을 거부하는 대신 무엇이 잘못됐는지 행 번호로 알려준다.
+ * Read a text file and replace the model.
+ *
+ * Takes the same path as opening a .ded, but instead of refusing the file it
+ * says what is wrong and on which line.
  */
 export async function openModelText(file: File): Promise<{ ok: boolean; message: string }> {
   const text = await file.text();
@@ -595,8 +625,10 @@ export async function openModelText(file: File): Promise<{ ok: boolean; message:
 
   if (!res.ok) {
     const head = res.errors.slice(0, 8).map((e) => '  · ' + e).join('\n');
-    const more = res.errors.length > 8 ? `\n  ... 외 ${res.errors.length - 8}건` : '';
-    return { ok: false, message: `텍스트를 읽는 중 문제가 있습니다.\n${head}${more}` };
+    const more = res.errors.length > 8
+      ? '\n  ' + tp('textio.msg.andMore', { n: res.errors.length - 8 })
+      : '';
+    return { ok: false, message: `${t('textio.msg.parseFailed')}\n${head}${more}` };
   }
 
   historyStore.pushState();
@@ -608,5 +640,8 @@ export async function openModelText(file: File): Promise<{ ok: boolean; message:
   resultsStore.clear();
 
   const c = res.counts!;
-  return { ok: true, message: `불러왔습니다. 절점 ${c.nodes}, 부재 ${c.elements}, 하중 ${c.loads}` };
+  return {
+    ok: true,
+    message: tp('textio.msg.loaded', { nodes: c.nodes, elements: c.elements, loads: c.loads }),
+  };
 }

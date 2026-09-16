@@ -1,0 +1,28 @@
+fix(dsm): read nodal loads as fz/my, not fy/mz
+
+`solveDetailed` destructured nodal loads as `{ fx, fy, mz }`, but
+`SolverNodalLoad` is `{ fx, fz, my }` — the names the 2D solver moved to
+when node coordinates went from (x, y) to (x, z). `fy` and `mz` were
+therefore `undefined`.
+
+The zero-skip guard did not catch it. `Math.abs(undefined)` is `NaN` and
+`NaN < 1e-15` is false, so the missing terms were not skipped as zeros:
+they were written into the load vector as `NaN`. From step 5 onwards the
+`NaN` spread through the partition, the displacements and the reactions,
+so the step-by-step wizard showed `NaN` for every result from step 7.
+
+The singularity checks in `solveLU` did not catch it either, for the same
+reason: `maxVal < singularityTol` is false when `maxVal` is `NaN`, so a
+poisoned matrix returned `NaN` rather than raising `detailed.singularMatrix`.
+
+Three changes:
+
+- Destructure the fields that exist, and pass them through.
+- Check `Number.isFinite` in `addLC` before the magnitude test, so a
+  missing term can never reach the vector.
+- Write both singularity checks as `!(a >= b)`, which is true for `NaN`
+  as well as for genuinely small pivots.
+
+Adds a regression test for the nodal-load path, which had none — only the
+distributed-load path was covered, which is why this survived. A cantilever
+with a tip load checks the tip deflection against PL³/3EI.
